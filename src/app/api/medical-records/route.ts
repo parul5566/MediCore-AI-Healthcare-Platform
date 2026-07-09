@@ -21,6 +21,24 @@ export async function GET(request: Request) {
       where.patientId = patient.id
     } else if (session.role === 'DOCTOR') {
       const { patientId } = Object.fromEntries(searchParams)
+      if (patientId) {
+        // Verify doctor has an appointment relationship with this patient
+        const doctor = await prisma.doctor.findUnique({ where: { userId: session.userId } })
+        if (doctor) {
+          const hasRelationship = await prisma.appointment.findFirst({
+            where: { doctorId: doctor.id, patientId },
+          })
+          if (hasRelationship) {
+            where.patientId = patientId
+          } else {
+            return NextResponse.json({ error: 'No patient relationship found' }, { status: 403 })
+          }
+        }
+      } else {
+        return NextResponse.json({ error: 'patientId required' }, { status: 400 })
+      }
+    } else if (session.role === 'ADMIN') {
+      const { patientId } = Object.fromEntries(searchParams)
       if (patientId) where.patientId = patientId
     }
 

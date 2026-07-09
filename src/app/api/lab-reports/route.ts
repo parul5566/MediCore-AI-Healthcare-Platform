@@ -11,11 +11,20 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const where: { patientId?: string } = {}
+    const where: any = {}
     if (session.role === 'PATIENT') {
       const patient = await prisma.patient.findUnique({ where: { userId: session.userId } })
       if (!patient) return NextResponse.json([])
       where.patientId = patient.id
+    } else if (session.role === 'DOCTOR') {
+      const doctor = await prisma.doctor.findUnique({ where: { userId: session.userId } })
+      if (!doctor) return NextResponse.json([])
+      const patientAppts = await prisma.appointment.findMany({
+        where: { doctorId: doctor.id },
+        select: { patientId: true },
+        distinct: ['patientId'],
+      })
+      where.patientId = { in: patientAppts.map(p => p.patientId) }
     }
 
     const reports = await prisma.labReport.findMany({

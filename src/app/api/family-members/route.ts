@@ -79,6 +79,21 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'ID required' }, { status: 400 })
     }
 
+    // Verify ownership: the family member must belong to this patient
+    const patient = await prisma.patient.findUnique({ where: { userId: session.userId } })
+    if (!patient) {
+      return NextResponse.json({ error: 'Patient profile not found' }, { status: 404 })
+    }
+
+    const familyMember = await prisma.familyMember.findUnique({ where: { id } })
+    if (!familyMember) {
+      return NextResponse.json({ error: 'Family member not found' }, { status: 404 })
+    }
+
+    if (familyMember.patientId !== patient.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     await prisma.familyMember.delete({ where: { id } })
 
     return NextResponse.json({ success: true })
