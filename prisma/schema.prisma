@@ -1,0 +1,221 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── USERS & AUTH ──────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  password     String
+  role         String   @default("PATIENT") // PATIENT, DOCTOR, ADMIN
+  firstName    String
+  lastName     String
+  phone        String?
+  avatar       String?
+  status       String   @default("ACTIVE") // ACTIVE, SUSPENDED, INACTIVE
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  patient           Patient?
+  doctor            Doctor?
+  // relations for messaging
+  sentMessages      Message[]      @relation("MessageSender")
+  receivedMessages  Message[]      @relation("MessageReceiver")
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  healthMetrics     HealthMetric[]
+}
+
+model Patient {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dateOfBirth     DateTime?
+  gender          String?  // MALE, FEMALE, OTHER
+  bloodGroup      String?  // A+, A-, B+, B-, AB+, AB-, O+, O-
+  address         String?
+  city            String?
+  state           String?
+  zipCode         String?
+  emergencyContact String?
+  height          Float?   // in cm
+  weight          Float?   // in kg
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  appointments    Appointment[] @relation("PatientAppointments")
+  prescriptions   Prescription[]
+  labReports      LabReport[]
+  medicalRecords  MedicalRecord[]
+  familyMembers   FamilyMember[]
+}
+
+model Doctor {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  specialization  String
+  licenseNumber   String   @unique
+  experience      Int      @default(0)
+  qualification    String?
+  bio             String?
+  consultationFee Float    @default(0)
+  rating          Float    @default(0)
+  verified        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  appointments    Appointment[] @relation("DoctorAppointments")
+  prescriptions   Prescription[]
+  labReports      LabReport[]
+  medicalRecords  MedicalRecord[]
+}
+
+// ─── APPOINTMENTS ──────────────────────────────────────────────
+
+model Appointment {
+  id          String   @id @default(cuid())
+  patientId   String
+  doctorId    String
+  patient     Patient  @relation("PatientAppointments", fields: [patientId], references: [id], onDelete: Cascade)
+  doctor      Doctor   @relation("DoctorAppointments", fields: [doctorId], references: [id], onDelete: Cascade)
+  date        DateTime
+  time        String   // HH:mm format
+  duration    Int      @default(30) // minutes
+  status      String   @default("PENDING") // PENDING, CONFIRMED, COMPLETED, CANCELLED, NO_SHOW
+  type        String   @default("IN_PERSON") // IN_PERSON, VIDEO, VOICE
+  reason      String?
+  symptoms    String?
+  notes       String?  // doctor notes post-visit
+  diagnosis   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── EHR: MEDICAL RECORDS ──────────────────────────────────────
+
+model MedicalRecord {
+  id          String   @id @default(cuid())
+  patientId   String
+  doctorId    String?
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor      Doctor?  @relation(fields: [doctorId], references: [id])
+  type        String   // CONDITION, ALLERGY, MEDICATION, VACCINATION, PROCEDURE, IMAGING
+  title       String
+  description String?
+  severity    String?  // MILD, MODERATE, SEVERE
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── PRESCRIPTIONS ─────────────────────────────────────────────
+
+model Prescription {
+  id          String   @id @default(cuid())
+  patientId   String
+  doctorId    String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor      Doctor   @relation(fields: [doctorId], references: [id])
+  medications Json     // [{name, dosage, frequency, duration, instructions}]
+  notes       String?
+  status      String   @default("ACTIVE") // ACTIVE, COMPLETED, EXPIRED
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── LAB REPORTS ───────────────────────────────────────────────
+
+model LabReport {
+  id          String   @id @default(cuid())
+  patientId   String
+  doctorId    String?
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor      Doctor?  @relation(fields: [doctorId], references: [id])
+  testName    String
+  category    String   @default("GENERAL") // GENERAL, BLOOD, URINE, IMAGING, PATHOLOGY
+  results     Json     // {parameter, value, unit, referenceRange, status}
+  summary     String?
+  status      String   @default("PENDING") // PENDING, COMPLETED, REVIEWED
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── MESSAGING ─────────────────────────────────────────────────
+
+model Message {
+  id          String   @id @default(cuid())
+  senderId    String
+  receiverId  String
+  sender      User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver    User     @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  content     String
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+// ─── NOTIFICATIONS ─────────────────────────────────────────────
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  message     String
+  type        String   @default("INFO") // INFO, APPOINTMENT, PRESCRIPTION, LAB, SYSTEM, ALERT
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+// ─── AUDIT LOGS ────────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  action      String   // LOGIN, CREATE, UPDATE, DELETE, etc.
+  entity      String
+  entityId    String?
+  details     String?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+}
+
+// ─── FAMILY MEMBERS ────────────────────────────────────────────
+
+model FamilyMember {
+  id          String   @id @default(cuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  name        String
+  relationship String
+  dateOfBirth DateTime?
+  gender      String?
+  bloodGroup  String?
+  medicalInfo String?
+  phone       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── HEALTH METRICS ────────────────────────────────────────────
+
+model HealthMetric {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String   // HEART_RATE, BLOOD_PRESSURE, GLUCOSE, STEPS, SLEEP, WEIGHT, TEMPERATURE
+  value       Float
+  secondaryValue Float? // for BP diastolic
+  unit        String
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+}
