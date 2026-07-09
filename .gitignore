@@ -44,3 +44,4 @@ next-env.d.ts
 
 # platform tooling (contains credentials)
 /.drytis/
+.playwright-mcp/
